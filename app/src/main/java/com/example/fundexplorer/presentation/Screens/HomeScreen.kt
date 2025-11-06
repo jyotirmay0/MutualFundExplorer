@@ -1,5 +1,6 @@
 package com.example.fundexplorer.presentation.Screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
@@ -32,6 +34,11 @@ fun HomeScreen(
 ) {
     val state = viewModel.state.value
 
+
+    BackHandler(enabled = state.searchQuery.isNotEmpty()) {
+        viewModel.onEvent(HomeEvent.SearchQueryChanged(""))
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -53,7 +60,7 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Search Bar
+
             OutlinedTextField(
                 value = state.searchQuery,
                 onValueChange = { viewModel.onEvent(HomeEvent.SearchQueryChanged(it)) },
@@ -62,11 +69,23 @@ fun HomeScreen(
                     .padding(16.dp),
                 placeholder = { Text("Search mutual funds...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (state.searchQuery.isNotEmpty()) {
+                        IconButton(onClick = {
+                            viewModel.onEvent(HomeEvent.SearchQueryChanged(""))
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear search"
+                            )
+                        }
+                    }
+                },
                 shape = RoundedCornerShape(28.dp),
                 singleLine = true
             )
 
-            // Category Filter
+
             LazyRow(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -82,7 +101,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Content
+
             Box(modifier = Modifier.fillMaxSize()) {
                 when {
                     state.isLoading -> {

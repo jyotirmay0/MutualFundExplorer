@@ -14,6 +14,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.example.fundexplorer.Navigation.Navigation
 
 import com.example.fundexplorer.ui.theme.FundExplorerTheme
+import com.example.fundexplorer.ui.theme.FundExplrerTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 
@@ -30,18 +31,3 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    FundExplorerTheme {
-        Greeting("Android")
-    }
-}

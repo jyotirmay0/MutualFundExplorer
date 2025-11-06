@@ -169,7 +169,7 @@ fun DetailContent(
             }
         }
 
-        // Time Range Selector
+
         Text(
             text = "NAV Performance",
             style = MaterialTheme.typography.titleLarge,
@@ -192,7 +192,7 @@ fun DetailContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Chart
+
         if (state.filteredNavData.isNotEmpty()) {
             NavChart(
                 navData = state.filteredNavData,
@@ -203,7 +203,7 @@ fun DetailContent(
             )
         }
 
-        // Statistics Card
+
         if (state.filteredNavData.isNotEmpty()) {
             StatisticsCard(navData = state.filteredNavData)
         }
@@ -284,7 +284,7 @@ fun NavChart(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Actual Line Chart using Canvas
+
                 NavLineChart(
                     navValues = navValues,
                     modifier = Modifier
@@ -319,7 +319,7 @@ fun NavLineChart(
 
         val xStep = (width - 2 * padding) / (navValues.size - 1).coerceAtLeast(1)
 
-        // Draw background grid
+
         val gridLines = 5
         for (i in 0..gridLines) {
             val y = padding + (height - 2 * padding) * i / gridLines
@@ -331,7 +331,7 @@ fun NavLineChart(
             )
         }
 
-        // Create path for the line chart
+
         val path = androidx.compose.ui.graphics.Path()
         val points = mutableListOf<androidx.compose.ui.geometry.Offset>()
 
@@ -348,7 +348,7 @@ fun NavLineChart(
             }
         }
 
-        // Draw gradient fill under the line
+
         val fillPath = androidx.compose.ui.graphics.Path().apply {
             addPath(path)
             lineTo(width - padding, height - padding)
@@ -368,7 +368,7 @@ fun NavLineChart(
             )
         )
 
-        // Draw the main line
+
         drawPath(
             path = path,
             color = primaryColor,
@@ -379,7 +379,7 @@ fun NavLineChart(
             )
         )
 
-        // Draw points on the line
+
         points.forEach { point ->
             drawCircle(
                 color = primaryColor,

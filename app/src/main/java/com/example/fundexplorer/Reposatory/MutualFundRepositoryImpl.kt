@@ -12,14 +12,34 @@ import kotlinx.coroutines.flow.flow
 import retrofit2.HttpException
 import java.io.IOException
 import javax.inject.Inject
+import javax.inject.Singleton
 
+@Singleton
 class MutualFundRepositoryImpl @Inject constructor(
     private val api: MutualFundApi
 ) : MutualFundRepository {
 
+
+    private var allFundsCache: List<MutualFund>? = null
+    private var fundDetailsCache: MutableMap<String, MutualFundDetail> = mutableMapOf()
+    private var cacheTimestamp: Long = 0
+    private val CACHE_DURATION = 5 * 60 * 1000L
+
+    private fun isCacheValid(): Boolean {
+        return allFundsCache != null && (System.currentTimeMillis() - cacheTimestamp) < CACHE_DURATION
+    }
+
     override fun getAllMutualFunds(): Flow<Resource<List<MutualFund>>> = flow {
         try {
             emit(Resource.Loading())
+
+
+            if (isCacheValid()) {
+                emit(Resource.Success(allFundsCache!!))
+                return@flow
+            }
+
+
             val funds = api.getAllMutualFunds().map { dto ->
                 MutualFund(
                     schemeCode = dto.schemeCode,
@@ -27,11 +47,21 @@ class MutualFundRepositoryImpl @Inject constructor(
                     schemeType = categorizeScheme(dto.schemeName)
                 )
             }
+
+
+            allFundsCache = funds
+            cacheTimestamp = System.currentTimeMillis()
+
             emit(Resource.Success(funds))
         } catch (e: HttpException) {
-            emit(Resource.Error(message = "Oops, something went wrong!"))
+
+            allFundsCache?.let {
+                emit(Resource.Success(it))
+            } ?: emit(Resource.Error(message = "Oops, something went wrong!"))
         } catch (e: IOException) {
-            emit(Resource.Error(message = "Couldn't reach server, check your internet connection."))
+            allFundsCache?.let {
+                emit(Resource.Success(it))
+            } ?: emit(Resource.Error(message = "Please check your internet connection."))
         } catch (e: Exception) {
             emit(Resource.Error(message = "An unexpected error occurred"))
         }
@@ -40,6 +70,14 @@ class MutualFundRepositoryImpl @Inject constructor(
     override fun getMutualFundDetails(schemeCode: String): Flow<Resource<MutualFundDetail>> = flow {
         try {
             emit(Resource.Loading())
+
+
+            fundDetailsCache[schemeCode]?.let {
+                emit(Resource.Success(it))
+                return@flow
+            }
+
+
             val response = api.getMutualFundDetails(schemeCode)
 
             val detail = MutualFundDetail(
@@ -51,11 +89,20 @@ class MutualFundRepositoryImpl @Inject constructor(
                 schemeType = response.meta.schemeType ?: categorizeScheme(response.meta.schemeName),
                 fundHouse = response.meta.fundHouse
             )
+
+
+            fundDetailsCache[schemeCode] = detail
+
             emit(Resource.Success(detail))
         } catch (e: HttpException) {
-            emit(Resource.Error(message = "Oops, something went wrong!"))
+
+            fundDetailsCache[schemeCode]?.let {
+                emit(Resource.Success(it))
+            } ?: emit(Resource.Error(message = "Oops, something went wrong!"))
         } catch (e: IOException) {
-            emit(Resource.Error(message = "Couldn't reach server, check your internet connection."))
+            fundDetailsCache[schemeCode]?.let {
+                emit(Resource.Success(it))
+            } ?: emit(Resource.Error(message = "Couldn't reach server, check your internet connection."))
         } catch (e: Exception) {
             emit(Resource.Error(message = "An unexpected error occurred"))
         }
@@ -64,21 +111,45 @@ class MutualFundRepositoryImpl @Inject constructor(
     override fun searchMutualFunds(query: String): Flow<Resource<List<MutualFund>>> = flow {
         try {
             emit(Resource.Loading())
-            val allFunds = api.getAllMutualFunds()
-            val filtered = allFunds.filter {
-                it.schemeName.contains(query, ignoreCase = true)
-            }.map { dto ->
-                MutualFund(
-                    schemeCode = dto.schemeCode,
-                    schemeName = dto.schemeName,
-                    schemeType = categorizeScheme(dto.schemeName)
-                )
+
+
+            val fundsToSearch = if (isCacheValid()) {
+                allFundsCache!!
+            } else {
+
+                val freshFunds = api.getAllMutualFunds().map { dto ->
+                    MutualFund(
+                        schemeCode = dto.schemeCode,
+                        schemeName = dto.schemeName,
+                        schemeType = categorizeScheme(dto.schemeName)
+                    )
+                }
+                allFundsCache = freshFunds
+                cacheTimestamp = System.currentTimeMillis()
+                freshFunds
             }
+
+
+            val filtered = fundsToSearch.filter {
+                it.schemeName.contains(query, ignoreCase = true)
+            }
+
             emit(Resource.Success(filtered))
         } catch (e: HttpException) {
-            emit(Resource.Error(message = "Oops, something went wrong!"))
+
+            allFundsCache?.let { cachedFunds ->
+                val filtered = cachedFunds.filter {
+                    it.schemeName.contains(query, ignoreCase = true)
+                }
+                emit(Resource.Success(filtered))
+            } ?: emit(Resource.Error(message = "Oops, something went wrong!"))
         } catch (e: IOException) {
-            emit(Resource.Error(message = "Couldn't reach server, check your internet connection."))
+            allFundsCache?.let { cachedFunds ->
+                val filtered = cachedFunds.filter {
+                    it.schemeName.contains(query, ignoreCase = true)
+                }
+                emit(Resource.Success(filtered))
+            } ?: emit(Resource.Error(message = "Couldn't reach server, check your internet connection."))
         } catch (e: Exception) {
             emit(Resource.Error(message = "An unexpected error occurred"))
         }
@@ -87,11 +158,26 @@ class MutualFundRepositoryImpl @Inject constructor(
     override fun getTopMutualFunds(limit: Int): Flow<Resource<List<MutualFund>>> = flow {
         try {
             emit(Resource.Loading())
-            val allFunds = api.getAllMutualFunds()
 
-            // Logic for "Top Funds": Popular fund houses
-            val topFunds = allFunds.filter { dto ->
-                val name = dto.schemeName.lowercase()
+            val fundsToFilter = if (isCacheValid()) {
+                allFundsCache!!
+            } else {
+                // Fetch fresh data
+                val freshFunds = api.getAllMutualFunds().map { dto ->
+                    MutualFund(
+                        schemeCode = dto.schemeCode,
+                        schemeName = dto.schemeName,
+                        schemeType = categorizeScheme(dto.schemeName)
+                    )
+                }
+                allFundsCache = freshFunds
+                cacheTimestamp = System.currentTimeMillis()
+                freshFunds
+            }
+
+
+            val topFunds = fundsToFilter.filter { fund ->
+                val name = fund.schemeName.lowercase()
                 name.contains("sbi") ||
                         name.contains("hdfc") ||
                         name.contains("icici") ||
@@ -101,19 +187,29 @@ class MutualFundRepositoryImpl @Inject constructor(
                         name.contains("reliance") ||
                         name.contains("nippon") ||
                         name.contains("uti")
-            }.take(limit).map { dto ->
-                MutualFund(
-                    schemeCode = dto.schemeCode,
-                    schemeName = dto.schemeName,
-                    schemeType = categorizeScheme(dto.schemeName)
-                )
-            }
+            }.take(limit)
 
             emit(Resource.Success(topFunds))
         } catch (e: HttpException) {
-            emit(Resource.Error(message = "Oops, something went wrong!"))
+            allFundsCache?.let { cachedFunds ->
+                val topFunds = cachedFunds.filter { fund ->
+                    val name = fund.schemeName.lowercase()
+                    name.contains("sbi") || name.contains("hdfc") || name.contains("icici") ||
+                            name.contains("axis") || name.contains("kotak") || name.contains("birla") ||
+                            name.contains("reliance") || name.contains("nippon") || name.contains("uti")
+                }.take(limit)
+                emit(Resource.Success(topFunds))
+            } ?: emit(Resource.Error(message = "Oops, something went wrong!"))
         } catch (e: IOException) {
-            emit(Resource.Error(message = "Couldn't reach server, check your internet connection."))
+            allFundsCache?.let { cachedFunds ->
+                val topFunds = cachedFunds.filter { fund ->
+                    val name = fund.schemeName.lowercase()
+                    name.contains("sbi") || name.contains("hdfc") || name.contains("icici") ||
+                            name.contains("axis") || name.contains("kotak") || name.contains("birla") ||
+                            name.contains("reliance") || name.contains("nippon") || name.contains("uti")
+                }.take(limit)
+                emit(Resource.Success(topFunds))
+            } ?: emit(Resource.Error(message = " Please check your internet connection."))
         } catch (e: Exception) {
             emit(Resource.Error(message = "An unexpected error occurred"))
         }
